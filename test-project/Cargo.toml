@@ -1,0 +1,9 @@
+[package]
+name = "test-project"
+version = "0.1.0"
+authors = ["João Baptista de Paula e Silva <jbaptistapsilva@yahoo.com.br>"]
+edition = "2018"
+
+[dependencies]
+path-processor = { path = "../path-processor"}
+path-svg-loader = { path = "../path-svg-loader"}

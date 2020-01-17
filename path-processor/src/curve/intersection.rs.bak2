@@ -1,0 +1,99 @@
+fn intersection_generic(out: &mut Vec<IntersectionPair>, c1: &Curve, c2: &Curve,
+    cp1: &CriticalPoints, cp2: &CriticalPoints) {
+    // Divide the curves into their monotonous parts, and use the monotonous algorithm to intersect them
+    for i1 in cp1.windows(2) {
+        for i2 in cp2.windows(2) {
+            intersection_generic_monotonous(out, c1, c2, c1.at(i1[0]), c1.at(i1[1]), c2.at(i2[0]), c2.at(i2[1]));
+        }
+    }
+}
+
+// A monotonous curve is a curve for which every x-line (and y-line) intersects the curve in only an element
+fn take_root<T: roots::FloatType>(root: roots::Roots<T>) -> T {
+    if let roots::Roots::One(v) = root { v[0] }
+    else { panic!("Only one root expected!") }
+}
+
+fn enclosing_args(curve: &Curve, rect: &Rect) -> ArrayVec<[Coord; 16]> {
+    // Get the intersections between the curve and the sides of the rectangle
+    let mut xi = ArrayVec::<[_; 8]>::new();
+    xi.try_extend_from_slice(curve.intersection_x(rect.x).as_ref()).unwrap();
+    xi.try_extend_from_slice(curve.intersection_x(rect.x + rect.width).as_ref()).unwrap();
+
+    let mut yi = ArrayVec::<[_; 8]>::new();
+    yi.try_extend_from_slice(curve.intersection_y(rect.y).as_ref()).unwrap();
+    yi.try_extend_from_slice(curve.intersection_y(rect.y + rect.height).as_ref()).unwrap();
+
+    // A third place just to detect a non-monotonous curve somehow
+    let mut intersections = ArrayVec::<[_; 16]>::new();
+    intersections.extend(xi.iter().filter(|&&t| curve.at(t).y >= rect.y && curve.at(t).y <= rect.y + rect.height).copied());
+    intersections.extend(yi.iter().filter(|&&t| curve.at(t).x >= rect.x && curve.at(t).x <= rect.x + rect.width).copied());
+
+    intersections
+}
+
+fn enclosing_points(curve: &Curve, rect: &Rect) -> Option<(Vec2, Vec2)> {
+    let intersections = enclosing_args(curve, rect);
+
+    let mut intersections: ArrayVec<[_; 16]> = intersections.into_iter().map(|t| curve.at(t)).collect();
+    intersections.sort_unstable_by(canonical);
+    arrayvec_dedup_by(&mut intersections, |&a,&b| a.roughly_equals(b));
+    intersections.sort_unstable_by(flipped_canonical);
+    arrayvec_dedup_by(&mut intersections, |&a,&b| a.roughly_equals(b));
+
+    match intersections.len() {
+        0 => None,
+        1 => Some((intersections[0], intersections[0])),
+        2 => Some((intersections[0], intersections[1])),
+        _ => panic!("Non-monotonous curve detected: we have {} points into the intersections.", intersections.len())
+    }
+}
+
+pub fn avg(v: &[Coord]) -> Coord {
+    assert!(!v.is_empty());
+    let mut r = 0.0;
+    for x in v { r += *x; }
+    return r / (v.len() as Coord);
+}
+
+fn intersection_generic_monotonous(out: &mut Vec<IntersectionPair>, c1: &Curve, c2: &Curve,
+    c1l: Vec2, c1r: Vec2, c2l: Vec2, c2r: Vec2) {
+    // The algorithm will divide the intersecting bounding box into two (taking the longest side) and
+    // discard the intersections that do not happen
+    let bb1 = Rect::enclosing_rect_of_two_points(c1l, c1r);
+    let bb2 = Rect::enclosing_rect_of_two_points(c2l, c2r);
+
+    // If there's an intersection
+    if let Some(bb) = bb1.intersection(bb2) {
+        // If the rectangle is already trivial
+        if bb.width.roughly_zero() && bb.height.roughly_zero() {
+            let t1 = enclosing_args(c1, &bb);
+            let t2 = enclosing_args(c2, &bb);
+            out.push(IntersectionPair(avg(&t1), avg(&t2)));
+        }
+        // Else, subdivide it along the longest length
+        else {
+            let rect1;
+            let rect2;
+
+            if bb.width >= bb.height {
+                let hw = bb.width / 2.0;
+                rect1 = Rect::new(bb.x, bb.y, hw, bb.height);
+                rect2 = Rect::new(bb.x + hw, bb.y, hw, bb.height);
+            } else {
+                let hh = bb.height / 2.0;
+                rect1 = Rect::new(bb.x, bb.y, bb.width, hh);
+                rect2 = Rect::new(bb.x, bb.y + hh, bb.width, hh);
+            }
+
+            // For each of our rects, if we find matching points in the curves, subdivide them again 
+            for rect in [rect1, rect2].into_iter() {
+                if let Some((c1l, c1r)) = enclosing_points(c1, rect) {
+                    if let Some((c2l, c2r)) = enclosing_points(c2, rect) {
+                        intersection_generic_monotonous(out, c1, c2, c1l, c1r, c2l, c2r);
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,2 @@
+[workspace]
+members = ["path-svg-loader", "path-processor", "test-project"]

@@ -1,0 +1,15 @@
+[package]
+name = "path-processor"
+version = "0.1.0"
+authors = ["João Baptista de Paula e Silva <jbaptistapsilva@yahoo.com.br>"]
+edition = "2018"
+
+[dependencies]
+derive_more = "0.99.2"
+roots = "0.0.6"
+ordered-float = "1.0.2"
+approx = "0.3.2"
+arrayvec = "0.5.1"
+
+[features]
+debug_dcel = []

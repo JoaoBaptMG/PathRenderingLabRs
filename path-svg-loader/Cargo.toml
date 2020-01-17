@@ -1,0 +1,9 @@
+[package]
+name = "path-svg-loader"
+version = "0.1.0"
+authors = ["João Baptista de Paula e Silva <jbaptistapsilva@yahoo.com.br>"]
+edition = "2018"
+
+[dependencies]
+svg = "0.6.0"
+path-processor = { path = "../path-processor" }
